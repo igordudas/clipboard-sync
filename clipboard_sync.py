@@ -1,6 +1,6 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+import Tkinter as tk
 
-import tkinter as tk
 import sys
 import threading
 
@@ -9,9 +9,13 @@ sep = '/0'
 escape_from = '/'
 escape_to   = '/ '
 
+def write_str(s):
+    sys.stdout.write(s)
+    sys.stdout.flush()
+
 root = tk.Tk()
 current = root.clipboard_get()
-print(current+sep, flush=True)
+write_str(current+sep)
 
 new_content = None
 nc_lock = threading.Lock()
@@ -61,7 +65,7 @@ def process_clipboard():
     tmp = root.clipboard_get()
     if tmp != current:
         current = tmp
-        print(current.replace(escape_from,escape_to) + sep, flush=True)
+        write_str(current.replace(escape_from,escape_to) + sep)
 
     root.after(DELAY, process_clipboard)
 
