@@ -5,12 +5,12 @@ import sys
 import threading
 
 DELAY = 500
-sep = '/0'
-escape_from = '/'
-escape_to   = '/ '
+sep = u'/0'
+escape_from = u'/'
+escape_to   = u'/ '
 
 def write_str(s):
-    sys.stdout.write(s)
+    sys.stdout.write(s.encode('utf-8'))
 
 root = tk.Tk()
 current = root.clipboard_get()
@@ -21,29 +21,29 @@ nc_lock = threading.Lock()
 
 def read_input():
     global new_content
-    incoming = ''
+    incoming = u''
     slash = False
     while True:
-        next_char = sys.stdin.read(1)
-        if next_char == '':
+        next_char = sys.stdin.read(1).decode('utf-8', 'replace')
+        if next_char == u'':
             break
 
         if slash:
-            if next_char == '0':
+            if next_char == u'0':
                 # input complete
                 nc_lock.acquire()
                 new_content = incoming
                 nc_lock.release()
-                incoming = ''
+                incoming = u''
                 slash = False
-            elif next_char == ' ':
-                incoming += '/'
+            elif next_char == u' ':
+                incoming += u'/'
                 slash = False
             else:
-                incoming += '/' + next_char
+                incoming += u'/' + next_char
                 slash = False
         else:
-            if next_char == '/':
+            if next_char == u'/':
                 slash = True
             else:
                 incoming += next_char
