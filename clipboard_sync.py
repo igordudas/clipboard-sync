@@ -11,7 +11,6 @@ escape_to   = '/ '
 
 def write_str(s):
     sys.stdout.write(s)
-    sys.stdout.flush()
 
 root = tk.Tk()
 current = root.clipboard_get()
