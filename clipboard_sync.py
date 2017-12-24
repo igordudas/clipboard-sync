@@ -21,32 +21,33 @@ new_content = None
 nc_lock = threading.Lock()
 
 def read_input():
+    # hoffentlich gibt es hier keine komischen Kollisionen zwischen '/0' bzw.
+    # '/ ' und einem Unicode-Zeichen
     global new_content
-    incoming = u''
+    incoming = ''
     slash = False
     while True:
-        next_byte = sys.stdin.read(1)
-        if next_byte == '':
+        next_char = sys.stdin.read(1)
+        if next_char == '':
             break
-        next_char = next_byte.decode('utf-8', 'replace')
         #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
 
         if slash:
-            if next_char == u'0':
+            if next_char == '0':
                 # input complete
                 nc_lock.acquire()
-                new_content = incoming
+                new_content = incoming.decode('utf-8', 'replace')
                 nc_lock.release()
-                incoming = u''
+                incoming = ''
                 slash = False
-            elif next_char == u' ':
-                incoming += u'/'
+            elif next_char == ' ':
+                incoming += '/'
                 slash = False
             else:
-                incoming += u'/' + next_char
+                incoming += '/' + next_char
                 slash = False
         else:
-            if next_char == u'/':
+            if next_char == '/':
                 slash = True
             else:
                 incoming += next_char
