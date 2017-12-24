@@ -11,10 +11,11 @@ escape_to   = u'/ '
 
 def write_str(s):
     sys.stdout.write(s.encode('utf-8'))
+    sys.stdout.flush()
 
 root = tk.Tk()
-current = root.clipboard_get()
-write_str(current+sep)
+current = root.clipboard_get(type='UTF8_STRING')
+write_str(current.replace(escape_from,escape_to)+sep)
 
 new_content = None
 nc_lock = threading.Lock()
@@ -24,9 +25,11 @@ def read_input():
     incoming = u''
     slash = False
     while True:
-        next_char = sys.stdin.read(1).decode('utf-8', 'replace')
-        if next_char == u'':
+        next_byte = sys.stdin.read(1)
+        if next_byte == '':
             break
+        next_char = next_byte.decode('utf-8', 'replace')
+        #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
 
         if slash:
             if next_char == u'0':
@@ -61,7 +64,9 @@ def process_clipboard():
         new_content = None
     nc_lock.release()
 
-    tmp = root.clipboard_get()
+    tmp = root.clipboard_get(type='UTF8_STRING')
+    #sys.stderr.write('CLIPBOARD content type: ' + str(type(tmp)))
+    #sys.stderr.write((u'CLIPBOARD: '+tmp+u'\n').encode('utf-8'))
     if tmp != current:
         current = tmp
         write_str(current.replace(escape_from,escape_to) + sep)
