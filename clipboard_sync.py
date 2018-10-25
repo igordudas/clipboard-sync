@@ -4,6 +4,7 @@ import Tkinter as tk
 import sys
 import threading
 import socket
+import collections
 
 DELAY = 500
 CLIENT_PORT = SERVER_PORT = 6666
@@ -43,35 +44,56 @@ def send_socket(unicode_msg):
     msg = str(len(msg)) + ',' + msg
     output_socket.send(msg)
 
+# not thread-safe because of shared deque!
+def read_unicode_char(read, leftover=collections.deque()):
+    if leftover:
+        return leftover.popleft()
+
+    charstr = ''
+    nextchar = ''
+    unichar = u''
+
+    # read bytes, until they form a valid utf-8 character
+    while not unichar:
+        nextchar = read(1)
+        if not nextchar:
+            if charstr: raise Exception('Input ended unexpectedly.')
+            else:       return u''
+
+        charstr += nextchar
+        unichar = charstr.decode('utf-8', 'ignore')
+
+    unichar = charstr.decode('utf-8', 'replace')
+    if len(unichar) > 1:
+        leftover.extend(unichar[1:])
+    return unichar[0]
 
 def read_input_stdin():
-    # hoffentlich gibt es hier keine komischen Kollisionen zwischen '/0' bzw.
-    # '/ ' und einem Unicode-Zeichen
     global new_content
     incoming = ''
     slash = False
     while True:
-        next_char = sys.stdin.read(1)
-        if next_char == '':
+        next_char = read_unicode_char(sys.stdin.read)
+        if not next_char:
             break
         #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
 
         if slash:
-            if next_char == '0':
+            if next_char == u'0':
                 # input complete
                 nc_lock.acquire()
-                new_content = incoming.decode('utf-8', 'replace')
+                new_content = incoming
                 nc_lock.release()
-                incoming = ''
+                incoming = u''
                 slash = False
-            elif next_char == ' ':
-                incoming += '/'
+            elif next_char == u' ':
+                incoming += u'/'
                 slash = False
             else:
-                incoming += '/' + next_char
+                incoming += u'/' + next_char
                 slash = False
         else:
-            if next_char == '/':
+            if next_char == u'/':
                 slash = True
             else:
                 incoming += next_char
