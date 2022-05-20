@@ -147,12 +147,14 @@ if sys.argv[1] == 'server':
 
     clientsocket, adress = serversocket.accept()
     th = threading.Thread(target=read_input_socket, args=(clientsocket,))
+    th.daemon = True
     th.start()
     output_socket = clientsocket
 elif sys.argv[1] == 'client':
     clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     clientsocket.connect(('localhost', CLIENT_PORT))
     th = threading.Thread(target=read_input_socket, args=(clientsocket,))
+    th.daemon = True
     th.start()
     output_socket = clientsocket
 
