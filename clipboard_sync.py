@@ -22,7 +22,7 @@ class SocketConnection:
     
     def __init__(self, conn_type):
         self.client_socket = None
-        
+
         if conn_type == 'server':
             serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             serversocket.bind(('localhost', SocketConnection.SERVER_PORT))
@@ -49,21 +49,28 @@ class SocketConnection:
         with contextlib.closing(self):
             while True:
                 char = self.client_socket.recv(1)
-                # TODO: handle closing of connection
+                if char == '':
+                    sys.stderr.write('Connection closed\n')
+                    root.destroy()
+                    return
+
                 if 48 <= ord(char) <= 57:
                     len_str += char
                 elif char == ',':
                     length = int(len_str)
                     len_str = ''
                     incoming = self.client_socket.recv(length)
-                    # TODO: handle closing of connection
+                    if incoming == '':
+                        sys.stderr.write('Connection closed\n')
+                        root.destroy()
+                        return
 
                     nc_lock.acquire()
                     new_content = incoming.decode('utf-8', 'replace')
                     nc_lock.release()
                 else:
                     raise Exception('Length input contains illegal character: ' + char + '\n')
-            
+
     def send(self, unicode_msg):
         msg = unicode_msg.encode('utf-8')
         msg = str(len(msg)) + ',' + msg
