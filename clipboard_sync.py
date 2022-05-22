@@ -109,10 +109,9 @@ class StdIOConnection:
         incoming = ''
         slash = False
         while True:
-            next_char = self.read_unicode_char()
+            next_char = self.read_unicode_char_internal()
             if not next_char:
                 break
-            #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
 
             if slash:
                 if next_char == u'0':
