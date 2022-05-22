@@ -33,12 +33,13 @@ class SocketConnection:
     
     def __init__(self, conn_type):
         self.client_socket = None
+        self.server_socket = None
 
         if conn_type == 'server':
-            serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            serversocket.bind(('localhost', SocketConnection.SERVER_PORT))
-            serversocket.listen(1)
-            self.client_socket, _ = serversocket.accept()
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.bind(('localhost', SocketConnection.SERVER_PORT))
+            self.server_socket.listen(1)
+            self.client_socket, _ = self.server_socket.accept()
         elif conn_type == 'client':
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.connect(('localhost', SocketConnection.CLIENT_PORT))
@@ -50,6 +51,10 @@ class SocketConnection:
             self.client_socket.shutdown(socket.SHUT_RDWR)
             self.client_socket.close()
             self.client_socket = None
+        if self.server_socket is not None:
+            self.server_socket.shutdown(socket.SHUT_RDWR)
+            self.server_socket.close()
+            self.server_socket = None
     
     def read_loop(self):
         global new_content
