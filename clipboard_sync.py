@@ -24,12 +24,12 @@ class SocketConnection:
         
         if conn_type == 'server':
             serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            serversocket.bind(('localhost', self.SERVER_PORT))
+            serversocket.bind(('localhost', SocketConnection.SERVER_PORT))
             serversocket.listen(1)
             self.client_socket, _ = serversocket.accept()
         elif conn_type == 'client':
-            self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.clientsocket.connect(('localhost', self.CLIENT_PORT))
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect(('localhost', SocketConnection.CLIENT_PORT))
         else:
             raise ValueError('conn_type has to be either "server" or "client"')
 
@@ -137,6 +137,7 @@ class StdIOConnection:
 def process_clipboard():
     global new_content
     global current
+    global conn
 
     root.after(DELAY, process_clipboard)
 
@@ -150,13 +151,20 @@ def process_clipboard():
 
     tmp = root.clipboard_get(type='UTF8_STRING')
     if tmp != current:
-        send(tmp)
+        conn.send(tmp)
         current = tmp
 
 
 root = tk.Tk()
 root.withdraw()
-current = root.clipboard_get(type='UTF8_STRING')
+
+def read_clipboard():
+    try:
+        return root.clipboard_get(type='UTF8_STRING')
+    except:
+        return u''
+
+current = read_clipboard()
 
 # socket
 if len(sys.argv) < 2:
@@ -168,7 +176,7 @@ elif sys.argv[1] == 'server':
     
 elif sys.argv[1] == 'client':
     conn = SocketConnection('client')
-    send(current)
+    conn.send(current)
     
 elif sys.argv[1] == 'stdio':
     conn = StdIOConnection()
