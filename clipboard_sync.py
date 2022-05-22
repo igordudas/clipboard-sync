@@ -7,101 +7,127 @@ import socket
 import collections
 
 DELAY = 500
-CLIENT_PORT = SERVER_PORT = 6666
+
 
 
 new_content = None
 nc_lock = threading.Lock()
+current = None
 
 output_socket = None
 
-def read_input_socket(sock):
-    global new_content
-    length = 0
-    len_str = ''
-    incoming = ''
+class SocketConnection:
+    CLIENT_PORT = SERVER_PORT = 6666
+    
+    def __init__(self, conn_type):
+        self.client_socket = None
+        
+        if conn_type == 'server':
+            serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            serversocket.bind(('localhost', self.SERVER_PORT))
+            serversocket.listen(1)
+            self.client_socket, _ = serversocket.accept()
+        elif conn_type == 'client':
+            self.clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.clientsocket.connect(('localhost', self.CLIENT_PORT))
+        else:
+            raise ValueError('conn_type has to be either "server" or "client"')
 
-    while True:
-        char = sock.recv(1)
-        # TODO: handle closing of connection
-        if 48 <= ord(char) <= 57:
-            len_str += char
-        elif char == ',':
-            length = int(len_str)
-            len_str = ''
-            incoming = sock.recv(length)
+    def close(self):
+        if self.client_socket is not None:
+            self.client_socket.shutdown(socket.SHUT_RDWR)
+            self.client_socket.close()
+    
+    def read_loop(self):
+        global new_content
+        length = 0
+        len_str = ''
+        incoming = ''
+
+        while True:
+            char = self.client_socket.recv(1)
             # TODO: handle closing of connection
+            if 48 <= ord(char) <= 57:
+                len_str += char
+            elif char == ',':
+                length = int(len_str)
+                len_str = ''
+                incoming = self.client_socket.recv(length)
+                # TODO: handle closing of connection
 
-            nc_lock.acquire()
-            new_content = incoming.decode('utf-8', 'replace')
-            nc_lock.release()
-        else:
-            raise Exception('Length input contains illegal character: ' + char + '\n')
-
-
-def send_socket(unicode_msg):
-    msg = unicode_msg.encode('utf-8')
-    msg = str(len(msg)) + ',' + msg
-    output_socket.send(msg)
-
-# not thread-safe because of shared deque!
-def read_unicode_char(read, leftover=collections.deque()):
-    if leftover:
-        return leftover.popleft()
-
-    charstr = ''
-    nextchar = ''
-    unichar = u''
-
-    # read bytes, until they form a valid utf-8 character
-    while not unichar:
-        nextchar = read(1)
-        if not nextchar:
-            if charstr: raise Exception('Input ended unexpectedly.')
-            else:       return u''
-
-        charstr += nextchar
-        unichar = charstr.decode('utf-8', 'ignore')
-
-    unichar = charstr.decode('utf-8', 'replace')
-    if len(unichar) > 1:
-        leftover.extend(unichar[1:])
-    return unichar[0]
-
-def read_input_stdin():
-    global new_content
-    incoming = ''
-    slash = False
-    while True:
-        next_char = read_unicode_char(sys.stdin.read)
-        if not next_char:
-            break
-        #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
-
-        if slash:
-            if next_char == u'0':
-                # input complete
                 nc_lock.acquire()
-                new_content = incoming
+                new_content = incoming.decode('utf-8', 'replace')
                 nc_lock.release()
-                incoming = u''
-                slash = False
-            elif next_char == u' ':
-                incoming += u'/'
-                slash = False
             else:
-                incoming += u'/' + next_char
-                slash = False
-        else:
-            if next_char == u'/':
-                slash = True
-            else:
-                incoming += next_char
+                raise Exception('Length input contains illegal character: ' + char + '\n')
+            
+    def send(self, unicode_msg):
+        msg = unicode_msg.encode('utf-8')
+        msg = str(len(msg)) + ',' + msg
+        self.client_socket.send(msg)
 
-def send_stdout(unicode_msg):
-    msg = (unicode_msg.replace('/', '/ ') + '/0') . encode('utf-8')
-    sys.stdout.write(msg)
-    sys.stdout.flush()
+
+class StdIOConnection:
+    def close(self):
+        pass
+    
+    def read_unicode_char_internal(self, leftover=collections.deque()):
+        if leftover:
+            return leftover.popleft()
+
+        charstr = ''
+        nextchar = ''
+        unichar = u''
+
+        # read bytes, until they form a valid utf-8 character
+        while not unichar:
+            nextchar = sys.stdin.read(1)
+            if not nextchar:
+                if charstr: raise Exception('Input ended unexpectedly.')
+                else:       return u''
+
+            charstr += nextchar
+            unichar = charstr.decode('utf-8', 'ignore')
+
+        unichar = charstr.decode('utf-8', 'replace')
+        if len(unichar) > 1:
+            leftover.extend(unichar[1:])
+        return unichar[0]
+    
+    def read_loop(self):
+        global new_content
+        incoming = ''
+        slash = False
+        while True:
+            next_char = self.read_unicode_char()
+            if not next_char:
+                break
+            #sys.stderr.write('I: "' + next_char.encode('utf-8') + '"\n')
+
+            if slash:
+                if next_char == u'0':
+                    # input complete
+                    nc_lock.acquire()
+                    new_content = incoming
+                    nc_lock.release()
+                    incoming = u''
+                    slash = False
+                elif next_char == u' ':
+                    incoming += u'/'
+                    slash = False
+                else:
+                    incoming += u'/' + next_char
+                    slash = False
+            else:
+                if next_char == u'/':
+                    slash = True
+                else:
+                    incoming += next_char
+    
+    def send(self, unicode_msg):
+        msg = (unicode_msg.replace('/', '/ ') + '/0') . encode('utf-8')
+        sys.stdout.write(msg)
+        sys.stdout.flush()
 
 
 def process_clipboard():
@@ -128,41 +154,28 @@ root = tk.Tk()
 root.withdraw()
 current = root.clipboard_get(type='UTF8_STRING')
 
-# stdin/stdout
-#th = threading.Thread(target=read_input_stdin)
-#th.start()
-#send = send_stdout
-#send(current)
-
 # socket
-send = send_socket
 if len(sys.argv) < 2:
-    sys.stderr.write('specify server/client as command line argument\n')
+    sys.stderr.write('specify server, client or stdio as command line argument\n')
     sys.exit()
 
-if sys.argv[1] == 'server':
-    serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    serversocket.bind(('localhost', SERVER_PORT))
-    serversocket.listen(1)
-
-    clientsocket, adress = serversocket.accept()
-    th = threading.Thread(target=read_input_socket, args=(clientsocket,))
-    th.daemon = True
-    th.start()
-    output_socket = clientsocket
+elif sys.argv[1] == 'server':
+    conn = SocketConnection('server')
+    
 elif sys.argv[1] == 'client':
-    clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    clientsocket.connect(('localhost', CLIENT_PORT))
-    th = threading.Thread(target=read_input_socket, args=(clientsocket,))
-    th.daemon = True
-    th.start()
-    output_socket = clientsocket
-
+    conn = SocketConnection('client')
     send(current)
+    
+elif sys.argv[1] == 'stdio':
+    conn = StdIOConnection()
+    
 else:
-    sys.stderr.write('specify server/client as command line argument\n')
+    sys.stderr.write('specify server, client or stdio as command line argument\n')
     sys.exit()
 
+th = threading.Thread(target=conn.read_loop)
+th.daemon = True
+th.start()
 
 root.after(DELAY, process_clipboard)
 root.mainloop()
