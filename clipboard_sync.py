@@ -5,7 +5,6 @@ import sys
 import threading
 import socket
 import collections
-import contextlib
 
 DELAY = 500
 
@@ -16,6 +15,18 @@ nc_lock = threading.Lock()
 current = None
 
 output_socket = None
+
+def quit_program(fn):
+    # decorator to close everything down when fn() ends
+    def new_fn(*args, **kwargs):
+        try:
+            fn(*args, **kwargs)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            conn.close()
+            root.destroy()
+    return new_fn
 
 class SocketConnection:
     CLIENT_PORT = SERVER_PORT = 6666
@@ -46,30 +57,27 @@ class SocketConnection:
         len_str = ''
         incoming = ''
 
-        with contextlib.closing(self):
-            while True:
-                char = self.client_socket.recv(1)
-                if char == '':
+        while True:
+            char = self.client_socket.recv(1)
+            if char == '':
+                sys.stderr.write('Connection closed\n')
+                return
+
+            if 48 <= ord(char) <= 57:
+                len_str += char
+            elif char == ',':
+                length = int(len_str)
+                len_str = ''
+                incoming = self.client_socket.recv(length)
+                if incoming == '':
                     sys.stderr.write('Connection closed\n')
-                    root.destroy()
                     return
 
-                if 48 <= ord(char) <= 57:
-                    len_str += char
-                elif char == ',':
-                    length = int(len_str)
-                    len_str = ''
-                    incoming = self.client_socket.recv(length)
-                    if incoming == '':
-                        sys.stderr.write('Connection closed\n')
-                        root.destroy()
-                        return
-
-                    nc_lock.acquire()
-                    new_content = incoming.decode('utf-8', 'replace')
-                    nc_lock.release()
-                else:
-                    raise Exception('Length input contains illegal character: ' + char + '\n')
+                nc_lock.acquire()
+                new_content = incoming.decode('utf-8', 'replace')
+                nc_lock.release()
+            else:
+                raise Exception('Length input contains illegal character: ' + char + '\n')
 
     def send(self, unicode_msg):
         msg = unicode_msg.encode('utf-8')
@@ -88,6 +96,7 @@ class StdIOConnection:
         charstr = ''
         nextchar = ''
         unichar = u''
+
 
         # read bytes, until they form a valid utf-8 character
         while not unichar:
@@ -193,7 +202,7 @@ else:
 
 
 try:
-    th = threading.Thread(target=conn.read_loop)
+    th = threading.Thread(target=quit_program(conn.read_loop))
     th.daemon = True
     th.start()
     root.after(DELAY, process_clipboard)
