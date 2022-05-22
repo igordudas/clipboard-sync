@@ -14,7 +14,6 @@ new_content = None
 nc_lock = threading.Lock()
 current = None
 
-output_socket = None
 
 def quit_program(fn):
     # decorator to close everything down when fn() ends
