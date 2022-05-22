@@ -5,6 +5,7 @@ import sys
 import threading
 import socket
 import collections
+import contextlib
 
 DELAY = 500
 
@@ -45,7 +46,7 @@ class SocketConnection:
         len_str = ''
         incoming = ''
 
-        try:
+        with contextlib.closing(self):
             while True:
                 char = self.client_socket.recv(1)
                 # TODO: handle closing of connection
@@ -62,8 +63,6 @@ class SocketConnection:
                     nc_lock.release()
                 else:
                     raise Exception('Length input contains illegal character: ' + char + '\n')
-        finally:
-            self.close()
             
     def send(self, unicode_msg):
         msg = unicode_msg.encode('utf-8')
@@ -187,11 +186,10 @@ else:
 
 
 
-try:
+with contextlib.closing(conn):
     th = threading.Thread(target=conn.read_loop)
     th.daemon = True
     th.start()
     root.after(DELAY, process_clipboard)
     root.mainloop()
-finally:
-    conn.close()
+
