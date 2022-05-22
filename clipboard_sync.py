@@ -37,6 +37,7 @@ class SocketConnection:
         if self.client_socket is not None:
             self.client_socket.shutdown(socket.SHUT_RDWR)
             self.client_socket.close()
+            self.client_socket = None
     
     def read_loop(self):
         global new_content
@@ -44,22 +45,25 @@ class SocketConnection:
         len_str = ''
         incoming = ''
 
-        while True:
-            char = self.client_socket.recv(1)
-            # TODO: handle closing of connection
-            if 48 <= ord(char) <= 57:
-                len_str += char
-            elif char == ',':
-                length = int(len_str)
-                len_str = ''
-                incoming = self.client_socket.recv(length)
+        try:
+            while True:
+                char = self.client_socket.recv(1)
                 # TODO: handle closing of connection
+                if 48 <= ord(char) <= 57:
+                    len_str += char
+                elif char == ',':
+                    length = int(len_str)
+                    len_str = ''
+                    incoming = self.client_socket.recv(length)
+                    # TODO: handle closing of connection
 
-                nc_lock.acquire()
-                new_content = incoming.decode('utf-8', 'replace')
-                nc_lock.release()
-            else:
-                raise Exception('Length input contains illegal character: ' + char + '\n')
+                    nc_lock.acquire()
+                    new_content = incoming.decode('utf-8', 'replace')
+                    nc_lock.release()
+                else:
+                    raise Exception('Length input contains illegal character: ' + char + '\n')
+        finally:
+            self.close()
             
     def send(self, unicode_msg):
         msg = unicode_msg.encode('utf-8')
@@ -173,9 +177,13 @@ else:
     sys.stderr.write('specify server, client or stdio as command line argument\n')
     sys.exit()
 
-th = threading.Thread(target=conn.read_loop)
-th.daemon = True
-th.start()
 
-root.after(DELAY, process_clipboard)
-root.mainloop()
+
+try:
+    th = threading.Thread(target=conn.read_loop)
+    th.daemon = True
+    th.start()
+    root.after(DELAY, process_clipboard)
+    root.mainloop()
+finally:
+    conn.close()
