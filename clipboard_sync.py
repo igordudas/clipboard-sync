@@ -193,10 +193,14 @@ else:
 
 
 
-with contextlib.closing(conn):
+try:
     th = threading.Thread(target=conn.read_loop)
     th.daemon = True
     th.start()
     root.after(DELAY, process_clipboard)
     root.mainloop()
+except KeyboardInterrupt:
+    pass
+finally:
+    conn.close()
 
