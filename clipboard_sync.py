@@ -161,6 +161,7 @@ elif sys.argv[1] == 'client':
     send(current)
 else:
     sys.stderr.write('specify server/client as command line argument\n')
+    sys.exit()
 
 
 root.after(DELAY, process_clipboard)
