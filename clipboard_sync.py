@@ -41,6 +41,15 @@ def quit_on_exception(fn):
 
     return new_fn
 
+class TkExceptionHandlingCallWrapper(tk.CallWrapper):
+    @quit_on_exception
+    def __call__(self, *args):
+        if self.subst:
+            args = self.subst(*args)
+        return self.func(*args)
+
+tk.CallWrapper = TkExceptionHandlingCallWrapper
+
 class SocketConnection:
     CLIENT_PORT = SERVER_PORT = 6666
     
