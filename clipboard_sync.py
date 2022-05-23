@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-import Tkinter as tk
+#!/usr/bin/env python3
+import tkinter as tk
 
 import sys
 import threading
@@ -59,10 +59,12 @@ class SocketConnection:
         global new_content
         length = 0
         len_str = ''
-        incoming = ''
+        incoming_bytes = b''
 
         while True:
-            char = self.client_socket.recv(1)
+            b_char = self.client_socket.recv(1)
+            char = b_char.decode('ascii', 'strict')
+
             if char == '':
                 sys.stderr.write('Connection closed\n')
                 return
@@ -72,21 +74,22 @@ class SocketConnection:
             elif char == ',':
                 length = int(len_str)
                 len_str = ''
-                incoming = self.client_socket.recv(length)
-                if incoming == '':
+                incoming_bytes = self.client_socket.recv(length)
+                if len(incoming_bytes) < length:
                     sys.stderr.write('Connection closed\n')
                     return
 
                 nc_lock.acquire()
-                new_content = incoming.decode('utf-8', 'replace')
+                new_content = incoming_bytes.decode('utf-8', 'replace')
                 nc_lock.release()
             else:
                 raise Exception('Length input contains illegal character: ' + char + '\n')
 
     def send(self, unicode_msg):
-        msg = unicode_msg.encode('utf-8')
-        msg = str(len(msg)) + ',' + msg
-        self.client_socket.send(msg)
+        msg_bytes = unicode_msg.encode('utf-8')
+        len_str = str(len(msg_bytes)) + ','
+        msg_bytes = len_str.encode('ascii', 'strict') + msg_bytes
+        self.client_socket.send(msg_bytes)
 
 
 class StdIOConnection:
@@ -97,17 +100,18 @@ class StdIOConnection:
         if leftover:
             return leftover.popleft()
 
-        charstr = ''
-        nextchar = ''
-        unichar = u''
+        stdin = sys.stdin.buffer # so we can read bytes instead of string
+        charstr = b''
+        nextchar = b''
+        unichar = ''
 
 
         # read bytes, until they form a valid utf-8 character
         while not unichar:
-            nextchar = sys.stdin.read(1)
+            nextchar = stdin.read(1)
             if not nextchar:
                 if charstr: raise Exception('Input ended unexpectedly.')
-                else:       return u''
+                else:       return ''
 
             charstr += nextchar
             unichar = charstr.decode('utf-8', 'ignore')
@@ -127,21 +131,21 @@ class StdIOConnection:
                 break
 
             if slash:
-                if next_char == u'0':
+                if next_char == '0':
                     # input complete
                     nc_lock.acquire()
                     new_content = incoming
                     nc_lock.release()
-                    incoming = u''
+                    incoming = ''
                     slash = False
-                elif next_char == u' ':
-                    incoming += u'/'
+                elif next_char == ' ':
+                    incoming += '/'
                     slash = False
                 else:
-                    incoming += u'/' + next_char
+                    incoming += '/' + next_char
                     slash = False
             else:
-                if next_char == u'/':
+                if next_char == '/':
                     slash = True
                 else:
                     incoming += next_char
@@ -156,7 +160,7 @@ def read_clipboard():
     try:
         return root.clipboard_get(type='UTF8_STRING')
     except:
-        return u''
+        return ''
 
 
 def process_clipboard():
