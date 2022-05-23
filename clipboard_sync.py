@@ -162,37 +162,12 @@ class StdIOConnection:
     def close(self):
         pass
     
-    def read_unicode_char_internal(self, leftover=collections.deque()):
-        if leftover:
-            return leftover.popleft()
-
-        stdin = sys.stdin.buffer # so we can read bytes instead of string
-        charstr = b''
-        nextchar = b''
-        unichar = ''
-
-
-        # read bytes, until they form a valid utf-8 character
-        while not unichar:
-            nextchar = stdin.read(1)
-            if not nextchar:
-                if charstr: raise Exception('Input ended unexpectedly.')
-                else:       return ''
-
-            charstr += nextchar
-            unichar = charstr.decode('utf-8', 'ignore')
-
-        unichar = charstr.decode('utf-8', 'replace')
-        if len(unichar) > 1:
-            leftover.extend(unichar[1:])
-        return unichar[0]
-    
     def read_loop(self):
         global new_content, nc_lock
         incoming = ''
         slash = False
         while True:
-            next_char = self.read_unicode_char_internal()
+            next_char = sys.stdin.read(1)
             if not next_char:
                 raise ExpectedException('Input stream closed')
 
