@@ -152,6 +152,13 @@ class StdIOConnection:
         sys.stdout.flush()
 
 
+def read_clipboard():
+    try:
+        return root.clipboard_get(type='UTF8_STRING')
+    except:
+        return u''
+
+
 def process_clipboard():
     global new_content
     global current
@@ -167,7 +174,7 @@ def process_clipboard():
             current, new_content = new_content, None
             return
 
-    tmp = root.clipboard_get(type='UTF8_STRING')
+    tmp = read_clipboard()
     if tmp != current:
         conn.send(tmp)
         current = tmp
@@ -175,13 +182,6 @@ def process_clipboard():
 
 root = tk.Tk()
 root.withdraw()
-
-def read_clipboard():
-    try:
-        return root.clipboard_get(type='UTF8_STRING')
-    except:
-        return u''
-
 current = read_clipboard()
 
 # socket
