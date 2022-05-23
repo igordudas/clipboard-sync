@@ -151,7 +151,7 @@ class StdIOConnection:
                     incoming += next_char
     
     def send(self, unicode_msg):
-        msg = (unicode_msg.replace('/', '/ ') + '/0') . encode('utf-8')
+        msg = unicode_msg.replace('/', '/ ') + '/0'
         sys.stdout.write(msg)
         sys.stdout.flush()
 
