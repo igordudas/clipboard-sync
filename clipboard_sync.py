@@ -7,23 +7,32 @@ import socket
 import collections
 import traceback
 
-DELAY = 500
 
-
+# Globals
 
 new_content = None
 nc_lock = threading.Lock()
-current = None
+current = None # current clipboard content
+
+conn = None # object representing connection to input/output (e.g. network or stdio)
+th = None # thread object handling IO
+
+CLIPBOARD_INTERVAL = 500
+root = None # tkinter app object
+
+
+
+# Code necessary to shut the application down properly
 
 class ExpectedException(Exception):
-    # this type of Exception is expected, so a stack trace should not be printed
+    # this type of Exception is expected, so a stack trace should not be printed when catching it
     def __init__(self, message):
         self.message = message
-
 
 def quit_on_exception(fn):
     # decorator to close everything down when fn() ends
     def new_fn(*args, **kwargs):
+        global root, conn
         try:
             fn(*args, **kwargs)
         except Exception as exc:
@@ -49,6 +58,42 @@ class TkExceptionHandlingCallWrapper(tk.CallWrapper):
         return self.func(*args)
 
 tk.CallWrapper = TkExceptionHandlingCallWrapper
+
+
+
+# Code for reading the clipboard
+
+def read_clipboard():
+    global root
+    try:
+        return root.clipboard_get(type='UTF8_STRING')
+    except:
+        return ''
+
+
+def process_clipboard():
+    global new_content, nc_lock, current
+    global conn, root
+    global CLIPBOARD_INTERVAL
+
+    root.after(CLIPBOARD_INTERVAL, process_clipboard)
+
+    with nc_lock:
+        if new_content is not None:
+            root.clipboard_clear()
+            root.clipboard_append(new_content)
+            # do not send new content back over socket
+            current, new_content = new_content, None
+            return
+
+    tmp = read_clipboard()
+    if tmp != current:
+        conn.send(tmp)
+        current = tmp
+
+
+
+# Supported IO connections
 
 class SocketConnection:
     CLIENT_PORT = SERVER_PORT = 6666
@@ -79,7 +124,7 @@ class SocketConnection:
             self.server_socket = None
     
     def read_loop(self):
-        global new_content
+        global new_content, nc_lock
         length = 0
         len_str = ''
         incoming_bytes = b''
@@ -143,7 +188,7 @@ class StdIOConnection:
         return unichar[0]
     
     def read_loop(self):
-        global new_content
+        global new_content, nc_lock
         incoming = ''
         slash = False
         while True:
@@ -177,67 +222,36 @@ class StdIOConnection:
         sys.stdout.flush()
 
 
-def read_clipboard():
+# Main program flow
+
+if __name__ == '__main__':
+    root = tk.Tk()
+    root.withdraw()
+    current = read_clipboard()
+
+    # socket
+    if len(sys.argv) < 2:
+        sys.stderr.write('specify server, client or stdio as command line argument\n')
+        sys.exit()
+    elif sys.argv[1] == 'server':
+        conn = SocketConnection('server')
+    elif sys.argv[1] == 'client':
+        conn = SocketConnection('client')
+        conn.send(current) # Initial synchronization
+    elif sys.argv[1] == 'stdio':
+        conn = StdIOConnection()
+    else:
+        sys.stderr.write('specify server, client or stdio as command line argument\n')
+        sys.exit()
+
     try:
-        return root.clipboard_get(type='UTF8_STRING')
-    except:
-        return ''
-
-
-def process_clipboard():
-    global new_content
-    global current
-    global conn
-
-    root.after(DELAY, process_clipboard)
-
-    with nc_lock:
-        if new_content is not None:
-            root.clipboard_clear()
-            root.clipboard_append(new_content)
-            # do not send new content back over socket
-            current, new_content = new_content, None
-            return
-
-    tmp = read_clipboard()
-    if tmp != current:
-        conn.send(tmp)
-        current = tmp
-
-
-root = tk.Tk()
-root.withdraw()
-current = read_clipboard()
-
-# socket
-if len(sys.argv) < 2:
-    sys.stderr.write('specify server, client or stdio as command line argument\n')
-    sys.exit()
-
-elif sys.argv[1] == 'server':
-    conn = SocketConnection('server')
-    
-elif sys.argv[1] == 'client':
-    conn = SocketConnection('client')
-    conn.send(current)
-    
-elif sys.argv[1] == 'stdio':
-    conn = StdIOConnection()
-    
-else:
-    sys.stderr.write('specify server, client or stdio as command line argument\n')
-    sys.exit()
-
-
-
-try:
-    th = threading.Thread(target=quit_on_exception(conn.read_loop))
-    th.daemon = True
-    th.start()
-    root.after(DELAY, quit_on_exception(process_clipboard))
-    root.mainloop()
-except KeyboardInterrupt:
-    pass
-finally:
-    conn.close()
+        th = threading.Thread(target=quit_on_exception(conn.read_loop))
+        th.daemon = True
+        th.start()
+        root.after(CLIPBOARD_INTERVAL, quit_on_exception(process_clipboard))
+        root.mainloop()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        conn.close()
 
