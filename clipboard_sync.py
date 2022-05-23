@@ -5,6 +5,7 @@ import sys
 import threading
 import socket
 import collections
+import traceback
 
 DELAY = 500
 
@@ -14,17 +15,30 @@ new_content = None
 nc_lock = threading.Lock()
 current = None
 
+class ExpectedException(Exception):
+    # this type of Exception is expected, so a stack trace should not be printed
+    def __init__(self, message):
+        self.message = message
 
-def quit_program(fn):
+
+def quit_on_exception(fn):
     # decorator to close everything down when fn() ends
     def new_fn(*args, **kwargs):
         try:
             fn(*args, **kwargs)
-        except KeyboardInterrupt:
-            pass
-        finally:
+        except Exception as exc:
+            if isinstance(exc, KeyboardInterrupt):
+                pass
+            elif isinstance(exc, SystemExit):
+                pass
+            elif isinstance(exc, ExpectedException):
+                sys.stderr.write(exc.message + '\n')
+            else:
+                traceback.print_exception(exc)
+
             conn.close()
             root.destroy()
+
     return new_fn
 
 class SocketConnection:
@@ -66,8 +80,7 @@ class SocketConnection:
             char = b_char.decode('ascii', 'strict')
 
             if char == '':
-                sys.stderr.write('Connection closed\n')
-                return
+                raise ExpectedException('Connection closed')
 
             if 48 <= ord(char) <= 57:
                 len_str += char
@@ -76,14 +89,13 @@ class SocketConnection:
                 len_str = ''
                 incoming_bytes = self.client_socket.recv(length)
                 if len(incoming_bytes) < length:
-                    sys.stderr.write('Connection closed\n')
-                    return
+                    raise ExpectedException('Connection closed')
 
                 nc_lock.acquire()
                 new_content = incoming_bytes.decode('utf-8', 'replace')
                 nc_lock.release()
             else:
-                raise Exception('Length input contains illegal character: ' + char + '\n')
+                raise Exception('Length input contains illegal character: ' + char)
 
     def send(self, unicode_msg):
         msg_bytes = unicode_msg.encode('utf-8')
@@ -128,7 +140,7 @@ class StdIOConnection:
         while True:
             next_char = self.read_unicode_char_internal()
             if not next_char:
-                break
+                raise ExpectedException('Input stream closed')
 
             if slash:
                 if next_char == '0':
@@ -210,10 +222,10 @@ else:
 
 
 try:
-    th = threading.Thread(target=quit_program(conn.read_loop))
+    th = threading.Thread(target=quit_on_exception(conn.read_loop))
     th.daemon = True
     th.start()
-    root.after(DELAY, process_clipboard)
+    root.after(DELAY, quit_on_exception(process_clipboard))
     root.mainloop()
 except KeyboardInterrupt:
     pass
